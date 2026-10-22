@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace TokenIssuanceAPI.Controllers
 {
@@ -8,45 +9,66 @@ namespace TokenIssuanceAPI.Controllers
     public class TokenIssuanceController : ControllerBase
     {
         [HttpPost]
-        public IActionResult Post([FromBody] JObject request)
+        public IActionResult Post([FromBody] JsonNode request)
         {
-            // ASP.NET Core handles reading Request.Body automatically into 'request'
             if (request == null)
             {
                 return BadRequest("Invalid JSON payload.");
             }
 
-            // Print the incoming payload to the console logs
-            Console.WriteLine(request.ToString());
+            // Log incoming request payload
+            Console.WriteLine(request.ToJsonString());
 
-            // Safely extract the correlation ID using null-conditional filtering
-            var correlationId = request["data"]?["authenticationContext"]?["correlationId"]?.ToString();
+            // Safely extract correlationId from incoming payload
+            string correlationId = request?["data"]?["authenticationContext"]?["correlationId"]?.GetValue<string>() ?? string.Empty;
 
-            // Construct the required Microsoft Graph response object
-            var response = new JObject
+            // Construct the exact response schema expected by Microsoft Entra ID
+            var response = new
             {
-                ["data"] = new JObject
+                data = new
                 {
-                    ["@odata.type"] = "microsoft.graph.onTokenIssuanceStartResponseData",
-                    ["actions"] = new JArray
+                    odataType = "microsoft.graph.onTokenIssuanceStartResponseData",
+                    actions = new[]
                     {
-                        new JObject
+                        new
                         {
-                            ["@odata.type"] = "microsoft.graph.tokenIssuanceStart.provideClaimsForToken",
-                            ["claims"] = new JObject
+                            odataType = "microsoft.graph.tokenIssuanceStart.provideClaimsForToken",
+                            claims = new
                             {
-                                ["CorrelationId"] = correlationId,
-                                ["ApiVersion"] = "1.0.0",
-                                ["DateOfBirth"] = "01/01/2000",
-                                ["CustomRoles"] = new JArray { "Writer", "Editor" }
+                                correlationId = correlationId,
+                                apiVersion = "1.0.0",
+                                dateOfBirth = "01/01/2000",
+                                customRoles = new[] { "Writer", "Editor" }
                             }
                         }
                     }
                 }
             };
 
-            // Return the structured JSON content
-            return Content(response.ToString(), "application/json");
+            // Options to ensure @odata.type properties format with exact @ prefix
+            var responseJson = new JsonObject
+            {
+                ["data"] = new JsonObject
+                {
+                    ["@odata.type"] = "microsoft.graph.onTokenIssuanceStartResponseData",
+                    ["actions"] = new JsonArray
+                    {
+                        new JsonObject
+                        {
+                            ["@odata.type"] = "microsoft.graph.tokenIssuanceStart.provideClaimsForToken",
+                            ["claims"] = new JsonObject
+                            {
+                                ["correlationId"] = correlationId,
+                                ["apiVersion"] = "1.0.0",
+                                ["dateOfBirth"] = "01/01/2000",
+                                ["customRoles"] = new JsonArray { "Writer", "Editor" }
+                            }
+                        }
+                    }
+                }
+            };
+
+            return Content(responseJson.ToJsonString(), "application/json");
         }
     }
 }
