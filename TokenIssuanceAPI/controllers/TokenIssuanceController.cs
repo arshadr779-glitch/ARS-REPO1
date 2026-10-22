@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
-using System.Text.Json.Nodes;
+using Newtonsoft.Json.Linq;
 
 namespace TokenIssuanceAPI.Controllers
 {
@@ -9,66 +8,45 @@ namespace TokenIssuanceAPI.Controllers
     public class TokenIssuanceController : ControllerBase
     {
         [HttpPost]
-        public IActionResult Post([FromBody] JsonNode request)
+        public IActionResult Post([FromBody] JObject request)
         {
+            // ASP.NET Core handles reading Request.Body automatically into 'request'
             if (request == null)
             {
                 return BadRequest("Invalid JSON payload.");
             }
 
-            // Log incoming request payload
-            Console.WriteLine(request.ToJsonString());
+            // Print the incoming payload to the console logs
+            Console.WriteLine(request.ToString());
 
-            // Safely extract correlationId from incoming payload
-            string correlationId = request?["data"]?["authenticationContext"]?["correlationId"]?.GetValue<string>() ?? string.Empty;
+            // Safely extract the correlation ID using null-conditional filtering
+            var correlationId = request["data"]?["authenticationContext"]?["correlationId"]?.ToString();
 
-            // Construct the exact response schema expected by Microsoft Entra ID
-            var response = new
+            // Construct the required Microsoft Graph response object
+            var response = new JObject
             {
-                data = new
-                {
-                    odataType = "microsoft.graph.onTokenIssuanceStartResponseData",
-                    actions = new[]
-                    {
-                        new
-                        {
-                            odataType = "microsoft.graph.tokenIssuanceStart.provideClaimsForToken",
-                            claims = new
-                            {
-                                correlationId = correlationId,
-                                apiVersion = "1.0.0",
-                                dateOfBirth = "01/01/2000",
-                                customRoles = new[] { "Writer", "Editor" }
-                            }
-                        }
-                    }
-                }
-            };
-
-            // Options to ensure @odata.type properties format with exact @ prefix
-            var responseJson = new JsonObject
-            {
-                ["data"] = new JsonObject
+                ["data"] = new JObject
                 {
                     ["@odata.type"] = "microsoft.graph.onTokenIssuanceStartResponseData",
-                    ["actions"] = new JsonArray
+                    ["actions"] = new JArray
                     {
-                        new JsonObject
+                        new JObject
                         {
                             ["@odata.type"] = "microsoft.graph.tokenIssuanceStart.provideClaimsForToken",
-                            ["claims"] = new JsonObject
+                            ["claims"] = new JObject
                             {
-                                ["correlationId"] = correlationId,
-                                ["apiVersion"] = "1.0.0",
-                                ["dateOfBirth"] = "01/01/2000",
-                                ["customRoles"] = new JsonArray { "Writer", "Editor" }
+                                ["CorrelationId"] = correlationId,
+                                ["ApiVersion"] = "1.0.0",
+                                ["DateOfBirth"] = "01/01/2000",
+                                ["CustomRoles"] = new JArray { "Writer", "Editor" }
                             }
                         }
                     }
                 }
             };
 
-            return Content(responseJson.ToJsonString(), "application/json");
+            // Return the structured JSON content
+            return Content(response.ToString(), "application/json");
         }
     }
 }
